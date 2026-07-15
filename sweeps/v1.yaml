@@ -1,0 +1,10 @@
+# v1 sweep. Models: swap in real model ids (e.g. claude-sonnet-4-6) when
+# running with API credentials; the scripted agents run offline.
+models:
+  - scripted
+  - scripted-stubborn
+tasks: tasks/*.yaml
+seeds: [0, 1, 2]
+fault_modes: [hard_error, transient, malformed, empty, timeout]
+variants: [caught, propagated]
+runs_dir: runs
