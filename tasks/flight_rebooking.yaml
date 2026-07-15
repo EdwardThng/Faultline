@@ -1,0 +1,27 @@
+name: flight_rebooking
+description: Find and book the cheapest available SFO->JFK flight.
+environment: travel
+max_steps: 12
+prompt: |
+  Your customer Alex Chen's flight to New York was cancelled. Search for
+  flights from SFO to JFK and book the cheapest one that has seats
+  available, under the passenger name "Alex Chen". Report the booking id
+  when done.
+checks:
+  - kind: state_equals
+    path: [bookings, B001, status]
+    value: confirmed
+  - kind: state_equals
+    path: [bookings, B001, flight_id]
+    value: FL100
+  - kind: state_equals
+    path: [bookings, B001, passenger]
+    value: Alex Chen
+  - kind: answer_contains
+    value: B001
+reference_plan:
+  - tool: search_flights
+    args: {origin: SFO, destination: JFK}
+  - tool: book_flight
+    args: {flight_id: FL100, passenger: Alex Chen}
+  - answer: Booked flight FL100 for Alex Chen, booking id B001.

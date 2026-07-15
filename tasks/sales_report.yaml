@@ -1,0 +1,20 @@
+name: sales_report
+description: Compute total revenue from a CSV and write it to a report file.
+environment: files
+max_steps: 12
+prompt: |
+  Read data/sales.csv, compute the total revenue (sum of units *
+  unit_price across all rows), and write just that number to
+  reports/total.txt. Then report the total.
+checks:
+  - kind: state_equals
+    path: [files, reports/total.txt]
+    value: "1250"
+  - kind: answer_contains
+    value: "1250"
+reference_plan:
+  - tool: read_file
+    args: {path: data/sales.csv}
+  - tool: write_file
+    args: {path: reports/total.txt, content: "1250"}
+  - answer: Total revenue is 1250; written to reports/total.txt.

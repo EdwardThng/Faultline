@@ -1,0 +1,29 @@
+name: order_refund
+description: Refund an order in full and email the customer a confirmation.
+environment: orders
+max_steps: 12
+prompt: |
+  The customer who placed order O-1001 has requested a refund. Look up the
+  order, refund the full amount, and send a confirmation email to the
+  customer's email address on file with the subject "Refund processed".
+checks:
+  - kind: state_equals
+    path: [orders, O-1001, status]
+    value: refunded
+  - kind: state_len_gte
+    path: [emails]
+    value: 1
+  - kind: state_equals
+    path: [emails, 0, to]
+    value: sam@example.com
+reference_plan:
+  - tool: lookup_order
+    args: {order_id: O-1001}
+  - tool: refund_order
+    args: {order_id: O-1001, amount: 89}
+  - tool: send_email
+    args:
+      to: sam@example.com
+      subject: Refund processed
+      body: Your refund of $89 for order O-1001 has been processed.
+  - answer: Refunded $89 for order O-1001 and emailed sam@example.com.
