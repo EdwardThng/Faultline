@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FaultLine — agent robustness leaderboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --accent: #2a78d6;
+    --seq-lo: #cde2fb; --seq-hi: #0d366b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --accent: #3987e5;
+      --seq-lo: #0d366b; --seq-hi: #9ec5f4;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --accent: #3987e5;
+    --seq-lo: #0d366b; --seq-hi: #9ec5f4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--ink-2); margin: 0 0 24px; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; min-width: 150px;
+  }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 30px; font-weight: 600; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .filters label { color: var(--ink-2); font-size: 13px; display: flex;
+                   align-items: center; gap: 6px; }
+  select {
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--grid); border-radius: 6px; padding: 4px 8px;
+    font: inherit; font-size: 13px;
+  }
+  .board { background: var(--surface); border: 1px solid var(--border);
+           border-radius: 10px; padding: 16px; overflow-x: auto; }
+  table { border-collapse: separate; border-spacing: 2px; width: 100%; }
+  th { font-size: 12px; font-weight: 600; color: var(--muted);
+       text-align: center; padding: 6px 8px; white-space: nowrap; }
+  th.model { text-align: left; }
+  td.model { font-weight: 600; white-space: nowrap; padding-right: 12px; }
+  td.cell {
+    border-radius: 4px; text-align: center; padding: 10px 8px;
+    min-width: 96px; cursor: pointer; border: 1px solid var(--border);
+  }
+  td.cell:hover { outline: 2px solid var(--accent); outline-offset: -1px; }
+  td.cell .rate { font-weight: 600; font-size: 15px; }
+  td.cell .ci { font-size: 11px; opacity: 0.85; }
+  td.empty { color: var(--muted); text-align: center; }
+  .drill { margin-top: 20px; background: var(--surface);
+           border: 1px solid var(--border); border-radius: 10px;
+           padding: 16px; display: none; }
+  .drill h2 { font-size: 16px; margin: 0 0 10px; }
+  .runrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+            padding: 7px 4px; border-top: 1px solid var(--grid);
+            font-size: 13px; }
+  .runrow a { color: var(--accent); text-decoration: none; }
+  .runrow a:hover { text-decoration: underline; }
+  .chip { display: inline-flex; align-items: center; gap: 6px;
+          font-size: 12px; color: var(--ink-2); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+         box-shadow: 0 0 0 2px var(--surface); }
+  .meta { color: var(--muted); }
+  .note { color: var(--muted); font-size: 12px; margin-top: 16px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px;
+            font-size: 12px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+  <h1>FaultLine</h1>
+  <p class="sub">What agents do <em>after</em> something goes wrong — recovery
+    rates by model &times; failure mode, from reproducible trace verdicts.</p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="filters">
+    <label>Fault mode <select id="f-mode"></select></label>
+    <label>Variant <select id="f-variant"></select></label>
+    <label>Task <select id="f-task"></select></label>
+  </div>
+
+  <div class="board">
+    <table id="matrix"></table>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="drill" id="drill"></div>
+
+  <p class="note">Recovery rate with Wilson 95% CI. Cells recompute from the
+    filtered run set; click a cell to inspect its runs down to individual tool
+    calls. Serve this directory (e.g. <code>python -m http.server -d site</code>)
+    after <code>faultline report --out site/data/</code>.</p>
+</main>
+
+<script>
+const VERDICT_COLOR = {
+  recovered: "var(--good)", degraded: "var(--warning)",
+  spiraled: "var(--serious)", doom_looped: "var(--critical)",
+  crashed: "var(--critical)",
+};
+const VERDICT_LABEL = {
+  recovered: "Recovered", degraded: "Degraded", spiraled: "Spiraled",
+  doom_looped: "Doom-looped", crashed: "Crashed",
+};
+
+function wilson(k, n, z = 1.96) {
+  if (!n) return [0, 1];
+  const p = k / n, d = 1 + z * z / n;
+  const c = (p + z * z / (2 * n)) / d;
+  const h = (z / d) * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+
+function hexLerp(a, b, t) {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return "#" + pa.map((v, i) =>
+    Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+function css(name) {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name).trim();
+}
+function cellColors(rate) {
+  const fill = hexLerp(css("--seq-lo"), css("--seq-hi"), rate);
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(fill.slice(i, i + 2), 16));
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return { fill, ink: lum > 140 ? "#0b0b0b" : "#ffffff" };
+}
+
+const pct = x => (100 * x).toFixed(0) + "%";
+let BOARD = null;
+
+function filteredRuns() {
+  const mode = document.getElementById("f-mode").value;
+  const variant = document.getElementById("f-variant").value;
+  const task = document.getElementById("f-task").value;
+  return Object.values(BOARD.runs).filter(r =>
+    (mode === "all" || r.fault.mode === mode) &&
+    (variant === "all" || r.fault.variant === variant ||
+      !BOARD.fault_keys.includes(r.fault.mode + "/" + variant)) &&
+    (task === "all" || r.task === task));
+}
+
+function render() {
+  const runs = filteredRuns();
+  const keys = [...new Set(runs.map(r => r.fault_key))].sort();
+  const models = BOARD.models;
+
+  const recovered = runs.filter(r => r.verdict === "recovered").length;
+  const doomed = runs.filter(r => r.verdict === "doom_looped").length;
+  document.getElementById("kpis").innerHTML = [
+    ["Faulted runs", runs.length],
+    ["Models", models.length],
+    ["Recovery rate", runs.length ? pct(recovered / runs.length) : "—"],
+    ["Doom-loop rate", runs.length ? pct(doomed / runs.length) : "—"],
+  ].map(([l, v]) => `<div class="tile"><div class="label">${l}</div>
+      <div class="value">${v}</div></div>`).join("");
+
+  const head = "<tr><th class='model'>Model</th>" +
+    keys.map(k => `<th>${k.replace("/", " / ")}</th>`).join("") + "</tr>";
+  const rows = models.map(m => {
+    const tds = keys.map(k => {
+      const rs = runs.filter(r => r.model === m && r.fault_key === k);
+      if (!rs.length) return "<td class='empty'>—</td>";
+      const rec = rs.filter(r => r.verdict === "recovered").length;
+      const rate = rec / rs.length;
+      const [lo, hi] = wilson(rec, rs.length);
+      const { fill, ink } = cellColors(rate);
+      return `<td class="cell" style="background:${fill};color:${ink}"
+        data-model="${m}" data-key="${k}" title="n=${rs.length}">
+        <div class="rate">${pct(rate)}</div>
+        <div class="ci">${pct(lo)}–${pct(hi)} · n=${rs.length}</div></td>`;
+    }).join("");
+    return `<tr><td class="model">${m}</td>${tds}</tr>`;
+  }).join("");
+  document.getElementById("matrix").innerHTML = head + rows;
+
+  document.getElementById("legend").innerHTML =
+    Object.entries(VERDICT_LABEL).map(([v, l]) =>
+      `<span class="chip"><span class="dot"
+        style="background:${VERDICT_COLOR[v]}"></span>${l}</span>`).join("");
+
+  document.querySelectorAll("td.cell").forEach(td =>
+    td.addEventListener("click", () => drill(td.dataset.model, td.dataset.key)));
+  document.getElementById("drill").style.display = "none";
+}
+
+function drill(model, key) {
+  const rs = filteredRuns()
+    .filter(r => r.model === model && r.fault_key === key)
+    .sort((a, b) => a.run_id.localeCompare(b.run_id));
+  const box = document.getElementById("drill");
+  box.style.display = "block";
+  box.innerHTML = `<h2>${model} · ${key} — ${rs.length} runs</h2>` +
+    rs.map(r => `<div class="runrow">
+      <span class="chip"><span class="dot"
+        style="background:${VERDICT_COLOR[r.verdict]}"></span>
+        ${VERDICT_LABEL[r.verdict]}</span>
+      <a href="trace.html?run=${encodeURIComponent(r.run_id)}">${r.run_id}</a>
+      <span class="meta">task ${r.task} · seed ${r.seed} ·
+        ${r.steps} steps (+${r.extra_steps} vs baseline) ·
+        ${r.max_signature_repeats} max repeats · ${r.termination}</span>
+    </div>`).join("");
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function fillSelect(id, values) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = ["all", ...values].map(v =>
+    `<option value="${v}">${v}</option>`).join("");
+  sel.addEventListener("change", render);
+}
+
+fetch("data/leaderboard.json")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(board => {
+    BOARD = board;
+    const modes = [...new Set(Object.values(board.runs)
+      .map(r => r.fault.mode))].sort();
+    fillSelect("f-mode", modes);
+    fillSelect("f-variant", ["caught", "propagated"]);
+    fillSelect("f-task", board.tasks);
+    render();
+    matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", render);
+  })
+  .catch(err => {
+    document.querySelector("main").insertAdjacentHTML("beforeend",
+      `<p class="note">Could not load <code>data/leaderboard.json</code>
+       (${err}). Run <code>faultline sweep</code> then
+       <code>faultline report --out site/data/</code>, and serve this
+       directory over HTTP.</p>`);
+  });
+</script>
+</body>
+</html>

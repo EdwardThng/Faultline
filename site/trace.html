@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FaultLine — run trace</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --border: rgba(11,11,11,0.10);
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
+    --critical: #d03b3b; --accent: #2a78d6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+      --accent: #3987e5;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --border: rgba(255,255,255,0.10);
+    --accent: #3987e5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 20px; margin: 8px 0 4px; word-break: break-all; }
+  .sub { color: var(--ink-2); margin: 0 0 20px; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .tile { background: var(--surface); border: 1px solid var(--border);
+          border-radius: 10px; padding: 10px 16px; min-width: 120px; }
+  .tile .label { color: var(--ink-2); font-size: 12px; }
+  .tile .value { font-size: 22px; font-weight: 600; }
+  .event { background: var(--surface); border: 1px solid var(--border);
+           border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+  .event header { display: flex; flex-wrap: wrap; gap: 10px;
+                  align-items: center; font-size: 13px; }
+  .idx { color: var(--muted); min-width: 2.5em;
+         font-variant-numeric: tabular-nums; }
+  .kind { font-weight: 600; }
+  .badge { font-size: 11px; font-weight: 600; padding: 1px 8px;
+           border-radius: 999px; border: 1px solid var(--border);
+           color: var(--ink-2); }
+  .badge.fault { border-color: var(--critical); color: var(--critical); }
+  .badge.error { border-color: var(--serious); color: var(--serious); }
+  .badge.ok { border-color: var(--good); color: var(--good); }
+  pre { background: var(--page); border: 1px solid var(--grid);
+        border-radius: 6px; padding: 8px 10px; margin: 8px 0 0;
+        font-size: 12.5px; overflow-x: auto; }
+  .meta { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <a href="index.html">&larr; leaderboard</a>
+  <div id="content"><p class="meta">loading…</p></div>
+</main>
+
+<script>
+const VERDICT_LABEL = {
+  recovered: "Recovered", degraded: "Degraded", spiraled: "Spiraled",
+  doom_looped: "Doom-looped", crashed: "Crashed",
+};
+const esc = s => String(s).replace(/[&<>"]/g,
+  c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+function eventHtml(e) {
+  if (e.type === "model_step") {
+    return `<div class="event"><header>
+      <span class="idx">#${e.index}</span>
+      <span class="kind">model step</span>
+      <span class="meta">${e.tokens_in} in / ${e.tokens_out} out
+        ${e.note ? "· " + esc(e.note) : ""}</span></header></div>`;
+  }
+  if (e.type === "tool_call") {
+    const status = e.status === "ok"
+      ? '<span class="badge ok">ok</span>'
+      : '<span class="badge error">error</span>';
+    const fault = e.fault_injected
+      ? '<span class="badge fault">fault injected</span>' : "";
+    const body = e.status === "ok"
+      ? `<pre>${esc(JSON.stringify(e.value, null, 2))}</pre>`
+      : `<pre>${esc(e.error)}</pre>`;
+    return `<div class="event"><header>
+      <span class="idx">#${e.index}</span>
+      <span class="kind">${esc(e.tool)}</span>${status}${fault}
+      <span class="meta">sig ${esc(e.signature)} ·
+        ${(e.latency_ms ?? 0).toFixed(1)}ms</span></header>
+      <pre>${esc(JSON.stringify(e.args, null, 2))}</pre>${body}</div>`;
+  }
+  if (e.type === "checks") {
+    return `<div class="event"><header>
+      <span class="idx">#${e.index}</span>
+      <span class="kind">success checks</span>
+      <span class="badge ${e.success ? "ok" : "error"}">
+        ${e.success ? "pass" : "fail"}</span></header>
+      ${e.checks.map(c => `<div class="meta">
+        ${c.ok ? "&#10003;" : "&#10007;"} ${esc(c.detail)}</div>`).join("")}
+    </div>`;
+  }
+  return `<div class="event"><header><span class="idx">#${e.index}</span>
+    <span class="kind">${esc(e.type)}</span></header></div>`;
+}
+
+const runId = new URLSearchParams(location.search).get("run");
+Promise.all([
+  fetch(`data/traces/${runId}.json`).then(r => {
+    if (!r.ok) throw new Error("trace not found"); return r.json();
+  }),
+  fetch("data/leaderboard.json").then(r => r.ok ? r.json() : null)
+    .catch(() => null),
+]).then(([trace, board]) => {
+  const record = board && board.runs[runId];
+  const fault = trace.fault.mode === "none" ? "baseline (no fault)"
+    : `${trace.fault.mode} / ${trace.fault.variant}`;
+  const tiles = [
+    ["Verdict", record ? VERDICT_LABEL[record.verdict] : "baseline"],
+    ["Termination", trace.termination],
+    ["Success", trace.success ? "yes" : "no"],
+    ["Steps", trace.steps],
+    ["Tool calls", trace.tool_calls],
+    ["Faults injected", trace.faults_injected],
+    ["Tokens", trace.tokens_in + trace.tokens_out],
+  ];
+  document.getElementById("content").innerHTML = `
+    <h1>${esc(trace.run_id)}</h1>
+    <p class="sub">${esc(trace.model)} · task ${esc(trace.task)} ·
+      seed ${trace.seed} · fault: ${esc(fault)}
+      ${trace.error ? "· " + esc(trace.error) : ""}</p>
+    <div class="kpis">${tiles.map(([l, v]) => `<div class="tile">
+      <div class="label">${l}</div><div class="value">${v}</div>
+      </div>`).join("")}</div>
+    ${trace.events.map(eventHtml).join("")}`;
+}).catch(err => {
+  document.getElementById("content").innerHTML =
+    `<p class="meta">Could not load run "${esc(runId)}": ${esc(err.message)}.
+     Generate data with <code>faultline report --out site/data/</code>.</p>`;
+});
+</script>
+</body>
+</html>
