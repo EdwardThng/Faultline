@@ -1,0 +1,12 @@
+# Verdict thresholds. Declared here and versioned with the results they
+# produced (see README "Methodology notes").
+verdict_thresholds:
+  # A failed run repeating one tool-call signature this many times is a
+  # doom loop. Set above the transient-fault retry count (2) so sensible
+  # retry-then-succeed behavior is never mislabeled.
+  doom_loop_repeats: 5
+  # "Recovered" requires steps <= baseline * ratio + abs.
+  recovered_max_step_overhead_ratio: 1.5
+  recovered_max_step_overhead_abs: 6
+  # ...and total tokens <= baseline * ratio (when token counts exist).
+  recovered_max_token_overhead_ratio: 2.5
