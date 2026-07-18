@@ -1,0 +1,63 @@
+name: Build & deploy leaderboard
+
+# Builds the static FaultLine leaderboard and publishes it to GitHub Pages.
+#
+# The sweep runs the offline *scripted* agents (see sweeps/v1.yaml), so this
+# pipeline needs no API keys or secrets to produce a live board. To publish a
+# real-model board, add provider credentials as repo secrets, expose them as
+# env in the "Run sweep" step, and point --config at a sweep whose `models`
+# list holds real model ids.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least-privilege token scopes required by the Pages deploy action.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes an in-flight run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Run sweep (offline scripted agents)
+        run: faultline sweep --config sweeps/v1.yaml
+
+      - name: Generate leaderboard data
+        run: faultline report --out site/data/
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
