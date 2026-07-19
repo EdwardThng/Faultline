@@ -87,13 +87,117 @@
   .note { color: var(--muted); font-size: 12px; margin-top: 16px; }
   .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px;
             font-size: 12px; color: var(--ink-2); }
+
+  /* --- landing hero + sections --- */
+  html { scroll-behavior: smooth; }
+  section { scroll-margin-top: 24px; }
+
+  .hero { min-height: 86vh; display: flex; flex-direction: column;
+          justify-content: center; max-width: 860px; padding: 40px 0; }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.16em;
+             font-size: 12px; color: var(--muted); margin: 0 0 22px; }
+  .hero-title { font-family: Georgia, "Times New Roman", Times, serif;
+                font-weight: 500; font-size: clamp(34px, 6vw, 60px);
+                line-height: 1.07; letter-spacing: -0.02em; margin: 0 0 26px; }
+  .hero-title .dim { color: var(--ink-2); }
+  .hero-sub { font-size: clamp(15px, 1.5vw, 18px); color: var(--ink-2);
+              line-height: 1.6; max-width: 60ch; margin: 0 0 34px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font: inherit;
+         font-size: 15px; line-height: 1; padding: 13px 22px; border-radius: 8px;
+         text-decoration: none; border: 1px solid transparent; cursor: pointer;
+         transition: opacity .15s, border-color .15s, color .15s; }
+  .btn-primary { background: var(--ink); color: var(--page); }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-outline { border-color: var(--border); color: var(--ink); }
+  .btn-outline:hover { border-color: var(--ink-2); }
+  .btn-text { color: var(--ink-2); padding: 13px 10px; }
+  .btn-text:hover { color: var(--ink); }
+
+  .section-title { font-family: Georgia, "Times New Roman", Times, serif;
+                   font-weight: 500; font-size: clamp(22px, 3vw, 30px);
+                   letter-spacing: -0.01em; margin: 0 0 8px; }
+  .section-sub { color: var(--ink-2); margin: 0 0 22px; max-width: 68ch; }
+  .how { padding: 44px 0 8px; border-top: 1px solid var(--border); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .step { background: var(--surface); border: 1px solid var(--border);
+          border-radius: 12px; padding: 18px 20px; }
+  .step .n { font-family: Georgia, serif; color: var(--muted);
+             font-size: 13px; letter-spacing: 0.08em; }
+  .step h3 { font-size: 16px; margin: 8px 0 8px; }
+  .step p { color: var(--ink-2); font-size: 13.5px; line-height: 1.55;
+            margin: 0; }
+  .step .tags { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 11.5px; color: var(--ink-2); border: 1px solid var(--grid);
+         border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+  .board-section { padding: 44px 0 0; border-top: 1px solid var(--border);
+                   margin-top: 40px; }
+  @media (max-width: 720px) { .steps { grid-template-columns: 1fr; }
+                              .hero { min-height: 78vh; } }
 </style>
 </head>
 <body>
 <main>
-  <h1>FaultLine</h1>
-  <p class="sub">What agents do <em>after</em> something goes wrong — recovery
-    rates by model &times; failure mode, from reproducible trace verdicts.</p>
+  <section class="hero" id="top">
+    <p class="eyebrow">Fault-injection benchmark for LLM agents</p>
+    <h1 class="hero-title">Most benchmarks test agents on a good day.<span
+      class="dim"> FaultLine tests what happens on a bad one.</span></h1>
+    <p class="hero-sub">A fault-injection benchmark for LLM agent loops. We break
+      a tool mid-task — a timeout, an error, malformed output — then score
+      whether the agent recovers, degrades, spirals, or doom-loops. Every verdict
+      is reproducible from the trace, not an LLM's opinion.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#board">View leaderboard</a>
+      <a class="btn btn-outline" href="#how">How it works</a>
+      <a class="btn btn-text"
+         href="https://github.com/EdwardThng/Faultline">GitHub &rarr;</a>
+    </div>
+  </section>
+
+  <section class="how" id="how">
+    <h2 class="section-title">How it works</h2>
+    <p class="section-sub">Every faulted run is compared against a fault-free
+      baseline of the same task, then classified from telemetry alone.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">01</div>
+        <h3>Inject a fault</h3>
+        <p>At a chosen step, the tool wrapper forces one call to fail — without
+          touching the agent framework's internals.</p>
+        <div class="tags">
+          <span class="tag">hard_error</span><span class="tag">transient</span>
+          <span class="tag">malformed</span><span class="tag">empty</span>
+          <span class="tag">timeout</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">02</div>
+        <h3>Run the loop through it</h3>
+        <p>The agent keeps going. Each fault runs two ways — surfaced to the model
+          as a tool result, or raised straight through the loop.</p>
+        <div class="tags">
+          <span class="tag">caught</span><span class="tag">propagated</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">03</div>
+        <h3>Score the trace</h3>
+        <p>Step count, repeated tool-call signatures, token cost and termination
+          decide one verdict. Reproducible — no LLM judge.</p>
+        <div class="tags">
+          <span class="tag">Recovered</span><span class="tag">Degraded</span>
+          <span class="tag">Spiraled</span><span class="tag">Doom-looped</span>
+          <span class="tag">Crashed</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="board-section" id="board">
+    <h2 class="section-title">The leaderboard</h2>
+    <p class="section-sub">What agents do <em>after</em> something goes wrong —
+      recovery rates by model &times; failure mode. Click any cell to inspect its
+      runs down to the individual tool calls.</p>
 
   <div class="kpis" id="kpis"></div>
 
@@ -111,9 +215,8 @@
   <div class="drill" id="drill"></div>
 
   <p class="note">Recovery rate with Wilson 95% CI. Cells recompute from the
-    filtered run set; click a cell to inspect its runs down to individual tool
-    calls. Serve this directory (e.g. <code>python -m http.server -d site</code>)
-    after <code>faultline report --out site/data/</code>.</p>
+    filtered run set. Generated by <code>faultline report --out site/data/</code>.</p>
+  </section>
 </main>
 
 <script>
